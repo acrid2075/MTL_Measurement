@@ -1,4 +1,4 @@
-use itch_parser::MsgStream;
+use rust::MsgStream;
 use std::env;
 use std::io::{self};
 //use std::process::Command;
