@@ -652,12 +652,16 @@ impl<R: Read> MsgStream<R> {
             let mut u_prev = 0;
             for msg in feed {
                 //a,f,d,x,c,e,u
-                //a,f
                 let typ = msg.typ;
                 if typ == 65 || typ == 70 {
+                    //a,f
                     let shares = msg.shares;
                     let price = msg.price;
-                    if msg.buy_sell == 66 || (msg.buy_sell == 0 && u_prev == 66) {
+                    if (msg.buy_sell == 0 && u_prev != 0) {
+                        msg.buy_sell = u_prev;
+                        u_prev = 0;
+                    }
+                    if msg.buy_sell == 66 {
                         bids.insert(msg.orrf, [price, shares]);
                         bid_depth += shares;
                         bid_spread
@@ -675,17 +679,21 @@ impl<R: Read> MsgStream<R> {
                 } else if typ == 68 || typ == 85 {
                     //d, u
                     if bids.contains_key(&msg.orrf) {
-                        let ord = bids.remove(&msg.orrf).unwrap();
+                        let ord = bids.remove(&msg.orrf).unwrap(); //bids is hashmap
                         let shares = ord[1];
-                        let price = ord[0];
-                        bid_spread
+                        let price = ord[0]; //price is the price associated with orrf
+                        bid_spread //bid_spread is the binary tree
                             .entry(price)
                             .and_modify(|curr_shares| *curr_shares -= shares);
                         if bid_spread.get(&price).unwrap() == &0 {
                             bid_spread.remove(&price);
                         }
+                        msg.buy_sell = 66;
+                        msg.price = price;
                         if typ == 85 {
                             u_prev = 66;
+                        } else {
+                            msg.shares = shares;
                         }
                         bid_depth -= shares;
                     } else if asks.contains_key(&msg.orrf) {
@@ -698,8 +706,12 @@ impl<R: Read> MsgStream<R> {
                         if ask_spread.get(&price).unwrap() == &0 {
                             ask_spread.remove(&price);
                         }
+                        msg.buy_sell = 83;
+                        msg.price = price;
                         if typ == 85 {
                             u_prev = 83;
+                        } else {
+                            msg.shares = shares;
                         }
                         ask_depth -= shares;
                     }
@@ -722,6 +734,8 @@ impl<R: Read> MsgStream<R> {
                             bid_spread.remove(&price);
                         }
                         bid_depth -= shares;
+                        msg.buy_sell = 66;
+                        msg.price = price;
                     } else if asks.contains_key(&msg.orrf) {
                         let order = asks.get(&msg.orrf).unwrap();
                         let shares = msg.shares;
@@ -739,6 +753,8 @@ impl<R: Read> MsgStream<R> {
                             ask_spread.remove(&price);
                         }
                         ask_depth -= shares;
+                        msg.buy_sell = 83;
+                        msg.price = price;
                     }
                 }
 
