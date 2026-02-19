@@ -2,8 +2,9 @@ import os
 import sys
 import sqlite3
 import multiprocessing as mp
-from ..entrypoints.latency_rust_interface import process_file
+from ..hftf.latency_analysis import process_file
 import time as time
+import shutil
 
 def process_files_for_date(date, basedir, db_path):
     """Process all files for a given date."""
@@ -24,11 +25,14 @@ def process_files_for_date(date, basedir, db_path):
         for i in range(0, len(flattened_results), batch_size):
             batch = flattened_results[i:i + batch_size]
             cursor.executemany(
-                "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", 
+                "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", 
                 batch
             )
         conn.commit()
         print(f"Finished processing date: {date}")
+        
+        shutil.rmtree(datedir)
+        print(f"Deleted {datedir}")
 
     except Exception as e:
         print(f"Error processing date {date}: {e}")

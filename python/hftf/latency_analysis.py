@@ -12,7 +12,7 @@ def process_file(filename):
     print(f"  Processing {ticker}, {day}")
     #Load-in File:
     dff = pd.read_csv(filename)#,
-                #   header = 0, dtype = {'typ': np.int64, 'timestamp': np.int64, 'orrf': np.int64, 'buy_sell':np.int64, 'shares': np.int64,
+                #   header = 0, dtype = {'typ': np.int64, 'timestamp': np.int64, 'orn': np.int64, 'buy_sell':np.int64, 'shares': np.int64,
                 #                        'price': np.int64, 'executed_shares': np.int64, 'executed_price': np.int64, 'new_orff': np.int64,
                 #                        'cancelled_shares': np.int64, 'bid': np.int64, 'ask': np.int64,
                 #                        'spread': np.int64, 'ask_depth': np.int64, 'bid_depth': np.int64,
@@ -21,11 +21,18 @@ def process_file(filename):
     dff[['typ', 'buy_sell']] = dff[['typ', 'buy_sell']].astype(pd.Int64Dtype())
 
     f = lambda x: chr(x) if isinstance(x, int) else x
-    dff[['typ', 'buy_sell']] = dff[['typ', 'buy_sell']].map(f)
+    dff['typ'] = dff['typ'].map(f)
+    dff['buy_sell'] = dff['buy_sell'].map(f)
 
-    dff.loc[0, 'spread'] = pd.NA
+
+    dff.loc[dff['buy_sell'] == "", 'buy_sell'] = pd.NA
+    dff.loc[dff['buy_sell'] == '\x00', 'buy_sell'] = pd.NA
+    dff.loc[dff['price'] == 0, 'price'] = pd.NA
+    dff.loc[dff['spread'] == 0, 'spread'] = pd.NA
     dff.loc[dff['bid'] == 0, 'bid'] = pd.NA
     dff.loc[dff['ask'] == 0, 'ask'] = pd.NA
+    dff.buy_sell = dff.groupby("orn").buy_sell.ffill()
+    dff.price = dff.groupby("orn")["price"].ffill()
 
     dff = dff.copy()
     #Market Hours:
