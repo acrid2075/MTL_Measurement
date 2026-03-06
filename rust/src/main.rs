@@ -32,8 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ---------------------------------------------
     // Paths (project-root relative)
     // ---------------------------------------------
-    let itch_path = format!("data/itchdata/S{}-v50.txt.gz", date);
-    let locate_path = format!("data/locates/bx_stocklocate_20{}.txt",
+    let itch_path = format!("/work/projects/nasdaq/itchdata/S{}-v50.txt.gz", date);
+    let locate_path = format!("data/locates/bx_stocklocate_{}.txt",
         format!("{}{}", &date[4..], &date[..4])  // reformat YYYYMMDD -> MMDDYYYY
     );
     let output_dir = format!("data/lob_files/{}", date);
