@@ -1,4 +1,4 @@
-use byteorder::BigEndian;
+use byteorder::{BigEndian, ByteOrder};
 use serde::Serialize;
 use std::io::Result;
 use std::u32;
@@ -69,7 +69,8 @@ fn parse_X(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let timestamp = read_u48_be(&frame[5..11]); //6
     let orn = BigEndian::read_u64(&frame[11..19]); //8
     let cancelled_shares = BigEndian::read_u32(&frame[19..23]);
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -82,7 +83,8 @@ fn parse_X(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: 0,
         shares: cancelled_shares,
         price: 0,
-    }]))
+    });
+    Ok(v)
 }
 
 fn parse_A(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
@@ -94,7 +96,8 @@ fn parse_A(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let shares = BigEndian::read_u32(&frame[20..24]);
     // stock information 8
     let price = BigEndian::read_u32(&frame[32..36]);
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -107,7 +110,8 @@ fn parse_A(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: buy_sell,
         shares: shares,
         price: price,
-    }]))
+    });
+    Ok(v)
 }
 
 fn parse_P(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
@@ -119,7 +123,8 @@ fn parse_P(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let shares = BigEndian::read_u32(&frame[20..24]);
     // stock information 8
     let price = BigEndian::read_u32(&frame[32..36]);
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -132,7 +137,8 @@ fn parse_P(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: buy_sell,
         shares: shares,
         price: price,
-    }]))
+    });
+    Ok(v)
 }
 
 fn parse_U(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
@@ -143,7 +149,8 @@ fn parse_U(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let new_orn = BigEndian::read_u64(&frame[19..27]); //8
     let shares = BigEndian::read_u32(&frame[27..31]);
     let price = BigEndian::read_u32(&frame[31..35]);
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -156,8 +163,8 @@ fn parse_U(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: 0,
         shares: shares,
         price: 0,
-    },
-    Message {
+    });
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -170,7 +177,8 @@ fn parse_U(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: 0,
         shares: shares,
         price: price,
-    }]))
+    });
+    Ok(v)
 }
 
 fn parse_E(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
@@ -181,7 +189,8 @@ fn parse_E(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let executed_shares = BigEndian::read_u32(&frame[19..23]);
     // match number 9
     let executed_price = BigEndian::read_u32(&frame[32..36]);
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -194,7 +203,8 @@ fn parse_E(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: 0,
         shares: executed_shares,
         price: executed_price,
-    }]))
+    });
+    Ok(v)
 }
 
 fn parse_D(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
@@ -202,7 +212,8 @@ fn parse_D(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     // tracking number 2
     let timestamp = read_u48_be(&frame[5..11]); //6
     let orn = BigEndian::read_u64(&frame[11..19]); //8
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -215,7 +226,8 @@ fn parse_D(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: 0,
         shares: 0,
         price: 0,
-    }]))
+    });
+    Ok(v)
 }
 
 fn parse_C(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
@@ -226,7 +238,8 @@ fn parse_C(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let executed_shares = BigEndian::read_u32(&frame[19..23]);
     // match number 9
     let price = BigEndian::read_u32(&frame[32..36]);
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -239,7 +252,8 @@ fn parse_C(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: 0,
         shares: executed_shares,
         price: 0,
-    }]))
+    });
+    Ok(v)
 }
 
 fn parse_F(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
@@ -251,7 +265,8 @@ fn parse_F(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let shares = BigEndian::read_u32(&frame[20..24]);
     // stock information 8
     let price = BigEndian::read_u32(&frame[32..36]);
-    Ok(SmallVec::from_buf([Message {
+    let mut v = SmallVec::<[Message; 2]>::new();
+    v.push(Message {
         bid_depth: 0,
         ask_depth: 0,
         depth: 0,
@@ -264,5 +279,6 @@ fn parse_F(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         buy_sell: buy_sell,
         shares: shares,
         price: price,
-    }]))
+    });
+    Ok(v)
 }

@@ -1,0 +1,21 @@
+#!/bin/bash -l
+#SBATCH --job-name=Multiprocessing_SQLite
+#SBATCH --array=175                  # 248 dates
+#SBATCH --nodes=4                    # One node per job
+#SBATCH --ntasks=1                   # One task per job
+#SBATCH --cpus-per-task=16           # Use 16 cores if needed for file-level parallelism - is this necessary? Are we leveraging this?
+#SBATCH --mem=4G                     # You should adjust memory as needed
+#SBATCH --time=12:00:00              # Maximum runtime per job
+#SBATCH --output=job_%A_%a.out
+#SBATCH --error=job_%A_%a.err
+
+module load env/development/2023b
+module load lang/Python/3.11.5-GCCcore-13.2.0
+module load lang/SciPy-bundle/2023.11-gfbf-2023b
+
+# Extract the corresponding date from dates_list.txt
+DATE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" dates_list.txt)
+echo "Processing date: ${DATE}"
+
+# Run the Python script with the date as an argument
+python ...python/entrypoints/latency_rust_interface.py "${DATE}"

@@ -148,15 +148,16 @@ impl OrderBook {
         msg0.depth = self.ask_depth + self.bid_depth;
         
         if typ == b'U' {
+            let buy_sell = msg0.buy_sell;
             let msg1 = &mut msgs[1];
             msg1.bid = bid;
             msg1.ask = ask;
             msg1.ask_depth = self.ask_depth;
             msg1.bid_depth = self.bid_depth;
             msg1.depth = self.ask_depth + self.bid_depth;
-            msg1.buy_sell = msg0.buy_sell;
+            msg1.buy_sell = buy_sell;
         }
 
-        Ok()
+        Ok(())
     }
 }

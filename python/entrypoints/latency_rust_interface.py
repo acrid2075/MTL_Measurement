@@ -2,54 +2,76 @@ import os
 import sys
 import sqlite3
 import multiprocessing as mp
-from ..hftf.latency_analysis import process_file
-import time as time
 import shutil
+from ..hftf.latency_analysis import process_file
 
-def process_files_for_date(date, basedir, db_path):
-    """Process all files for a given date."""
+
+def process_files_for_date(date, project_root):
+
+    datedir = os.path.join(project_root, "data/lob_files", date)
+    db_path = os.path.join(project_root, "results/sql_db/data.db")
+
+    if not os.path.isdir(datedir):
+        print(f"No directory for {date}, skipping.")
+        return
+
+    print(f"\nProcessing date: {date}")
+
+    filenames = [
+        os.path.join(datedir, f)
+        for f in os.listdir(datedir)
+        if f.endswith(".csv")
+    ]
+
+    if not filenames:
+        print(f"No CSV files found for {date}")
+        return
+
+    num_cpus = max(1, int(os.getenv("SLURM_CPUS_PER_TASK", 1)))
+
+    # Run multiprocessing
+    with mp.Pool(processes=num_cpus) as pool:
+        results = pool.map(process_file, filenames)
+
+    flattened = [row for sublist in results for row in sublist]
+
+    if not flattened:
+        print(f"No results generated for {date}")
+        return
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        print(f"Processing date: {date}")
-        datedir = os.path.join(basedir, 'Latency_ULHPC/MTL_Measurement/data/lob_files', date)
-        filenames = [os.path.join(datedir, stock) for stock in os.listdir(datedir)]
+        cursor.executemany(
+            """
+            INSERT INTO results
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            flattened
+        )
 
-        num_cpus = max(1, int(os.getenv("SLURM_CPUS_PER_TASK", 1)))
-        with mp.Pool(processes=num_cpus) as pool:
-            results = pool.map(process_file, filenames)
-
-        batch_size = 100  # Batch size for database inserts
-        flattened_results = [j for k in results for j in k]
-        for i in range(0, len(flattened_results), batch_size):
-            batch = flattened_results[i:i + batch_size]
-            cursor.executemany(
-                "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", 
-                batch
-            )
         conn.commit()
-        print(f"Finished processing date: {date}")
-        
-        shutil.rmtree(datedir)
-        print(f"Deleted {datedir}")
+        print(f"Committed results for {date}")
 
     except Exception as e:
-        print(f"Error processing date {date}: {e}")
+        conn.rollback()
+        print(f"Database error on {date}: {e}")
+        raise
 
     finally:
         conn.close()
 
+    # Only delete AFTER successful commit
+    shutil.rmtree(datedir)
+    print(f"Deleted lob_files for {date}")
+
+
 if __name__ == "__main__":
-    start = time.time()
     if len(sys.argv) != 2:
-        print("Usage: python latency_rust_interface.py <date>")
+        print("Usage: latency_rust_interface.py YYYYMMDD")
         sys.exit(1)
 
     date = sys.argv[1]
-    basedir = os.getcwd()
-    db_path = "/home/users/swarnick/Latency_ULHPC/MTL_Measurement/results/sql_db/data.db"
-
-    process_files_for_date(date, basedir, db_path)
-    end = time.time() - start
-    print(f'Finished analyzing {date}. {end}')
+    project_root = os.getcwd()
+    process_files_for_date(date, project_root)
