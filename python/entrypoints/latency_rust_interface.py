@@ -7,9 +7,13 @@ from ..hftf.latency_analysis import process_file
 
 
 def process_files_for_date(date, project_root):
-
-    datedir = os.path.join(project_root, "data/lob_files", date)
-    db_path = os.path.join(project_root, "results/sql_db/data.db")
+    LOB_ROOT = os.environ.get("MTL_LOB_ROOT", "data/lob_files")
+    folder = os.path.join(LOB_ROOT, date)
+    datedir = folder
+    db_path = os.environ.get(
+        "MTL_DB_PATH",
+        os.path.join(project_root, "results", "sql_db", "data.db")
+    )
 
     if not os.path.isdir(datedir):
         print(f"No directory for {date}, skipping.")
@@ -63,7 +67,8 @@ def process_files_for_date(date, project_root):
         conn.close()
 
     # Only delete AFTER successful commit
-    shutil.rmtree(datedir)
+    shutil.rmtree(datedir, ignore_errors=True)
+
     print(f"Deleted lob_files for {date}")
 
 

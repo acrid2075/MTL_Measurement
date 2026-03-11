@@ -1,0 +1,68 @@
+Bootstrap: docker
+From: rust:1.75-bullseye
+
+%labels
+    Author AndrewCriddle/MTL_Measurement
+    Version v1
+    Description "Rust + Python (numpy/pandas) + sqlite3 for ULHPC latency pipeline"
+
+%environment
+    export LC_ALL=C
+    export LANG=C
+
+%post
+    set -eux
+
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        git \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-dev \
+        pkg-config \
+        libsqlite3-0 \
+        libsqlite3-dev \
+        libopenblas-dev \
+        liblapack-dev \
+        gfortran \
+        tini \
+        time \
+        locales \
+        ca-certificates
+
+    rm -rf /var/lib/apt/lists/*
+
+    # Upgrade pip
+    python3 -m pip install --upgrade pip
+
+    # Install Python stack
+    pip3 install --no-cache-dir \
+        numpy \
+        pandas \
+        scipy \
+        statsmodels \
+        matplotlib
+
+    # Sanity checks at build time
+    python3 -c "import numpy, pandas, sqlite3; print('Python OK:', numpy.__version__, pandas.__version__)"
+    cargo --version
+    rustc --version
+
+
+    # Clean up
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+%environment
+    export LANG=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
+    export PYTHONDONTWRITEBYTECODE=1
+    export PYTHONUNBUFFERED=1
+    export PATH="/usr/local/cargo/bin:${PATH}"
+
+%runscript
+    # Allow: apptainer run image.sif <command ...>
+    exec "$@"

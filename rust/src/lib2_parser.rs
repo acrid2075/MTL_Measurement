@@ -188,7 +188,7 @@ fn parse_E(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
     let orn = BigEndian::read_u64(&frame[11..19]); //8
     let executed_shares = BigEndian::read_u32(&frame[19..23]);
     // match number 9
-    let executed_price = BigEndian::read_u32(&frame[32..36]);
+    // let executed_price = BigEndian::read_u32(&frame[32..36]);
     let mut v = SmallVec::<[Message; 2]>::new();
     v.push(Message {
         bid_depth: 0,
@@ -202,7 +202,7 @@ fn parse_E(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         orn: orn,
         buy_sell: 0,
         shares: executed_shares,
-        price: executed_price,
+        price: 0,//executed_price,
     });
     Ok(v)
 }

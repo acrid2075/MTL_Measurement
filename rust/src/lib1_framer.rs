@@ -1,4 +1,6 @@
 use std::io::{Read, Result};
+use byteorder::{BigEndian, ByteOrder};
+
 // monthdayyear
 
 pub const BUFSIZE: usize = 65536;
@@ -51,8 +53,7 @@ impl<R: Read> MsgStream<R> {
 
     pub fn next_frame(&mut self) -> std::io::Result<Option<&[u8]>> {
         loop {
-            // Need at least 1 byte for message type
-            if self.cursor >= self.buffer.len() {
+            if self.buffer.len().saturating_sub(self.cursor) < 2 {
                 self.compact();
                 if !self.fill_buffer()? {
                     return Ok(None);
@@ -60,29 +61,27 @@ impl<R: Read> MsgStream<R> {
                 continue;
             }
 
-            let msg_type = self.buffer[self.cursor];
+            let msg_len =
+                BigEndian::read_u16(&self.buffer[self.cursor..self.cursor + 2]) as usize;
 
-            let len = match message_length(msg_type) {
-                Some(l) => l,
-                None => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        format!("Unknown message type: {}", msg_type),
-                    ));
-                }
-            };
+            if msg_len == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Zero-length ITCH message",
+                ));
+            }
 
-            // Not enough bytes yet
-            if self.buffer.len() - self.cursor < len {
+            let total_len = 2 + msg_len;
+
+            if self.buffer.len() - self.cursor < total_len {
                 if !self.fill_buffer()? {
                     return Ok(None);
                 }
                 continue;
             }
 
-            let start = self.cursor;
-            let end = start + len;
-
+            let start = self.cursor + 2;
+            let end = self.cursor + total_len;
             self.cursor = end;
 
             return Ok(Some(&self.buffer[start..end]));
@@ -92,11 +91,9 @@ impl<R: Read> MsgStream<R> {
     fn fill_buffer(&mut self) -> std::io::Result<bool> {
         let mut temp = [0u8; BUFSIZE];
         let bytes_read = self.reader.read(&mut temp)?;
-
         if bytes_read == 0 {
             return Ok(false);
         }
-
         self.buffer.extend_from_slice(&temp[..bytes_read]);
         Ok(true)
     }

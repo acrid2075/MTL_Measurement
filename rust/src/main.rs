@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::{self, File};
 use std::io::{BufReader};
@@ -13,8 +13,36 @@ mod lib2_parser;
 mod lib3_ob;
 
 use lib1_framer::MsgStream;
-use lib2_parser::{parse_message, Message};
+use lib2_parser::parse_message;
 use lib3_ob::OrderBook;
+
+fn normalize_ticker(t: &str) -> String {
+    t.trim().to_uppercase().replace('-', ".")
+}
+
+fn load_allowed_tickers(date: &str) -> Result<HashSet<String>, Box<dyn std::error::Error>> {
+    if date.len() != 8 || !date.chars().all(|c| c.is_ascii_digit()) {
+        return Err(format!("date must be YYYYMMDD, got {}", date).into());
+    }
+    let year = &date[..4];
+    let sp500_path = "/home/users/swarnick/sp500.csv";
+
+    let mut rdr = csv::Reader::from_path(sp500_path)?;
+    let mut allowed = HashSet::new();
+
+    for result in rdr.records() {
+        let record = result?;
+        let datadate = record.get(3).unwrap_or("").trim();   // datadate
+        let tic = record.get(4).unwrap_or("").trim();        // tic
+        let flag = record.get(5).unwrap_or("").trim();       // curr_sp500_flag
+
+        if flag == "1" && datadate.starts_with(year) && !tic.is_empty() {
+            allowed.insert(normalize_ticker(tic));
+        }
+    }
+
+    Ok(allowed)
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -32,11 +60,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ---------------------------------------------
     // Paths (project-root relative)
     // ---------------------------------------------
-    let itch_path = format!("/work/projects/nasdaq/itchdata/S{}-v50.txt.gz", date);
-    let locate_path = format!("data/locates/bx_stocklocate_{}.txt",
-        format!("{}{}", &date[4..], &date[..4])  // reformat YYYYMMDD -> MMDDYYYY
-    );
-    let output_dir = format!("data/lob_files/{}", date);
+    let yy = &date[2..4];
+    let mm = &date[4..6];
+    let dd = &date[6..8];
+    let itch_date = format!("{}{}{}", mm, dd, yy);
+
+    let itch_path = format!("/work/projects/nasdaq/itchdata/S{}-v50.txt.gz", itch_date);
+    let locate_path = format!("data/locates/bx_stocklocate_{}.txt", date);
+    let lob_root = env::var("MTL_LOB_ROOT")
+        .unwrap_or_else(|_| format!("{}/data/lob_files", env::current_dir().unwrap().display()));
+
+    let output_dir = format!("{}/{}", lob_root, date);
 
     if !Path::new(&itch_path).exists() {
         panic!("ITCH file not found: {}", itch_path);
@@ -50,21 +84,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Parsing {}", itch_path);
 
+    let mut total_locates = 0usize;
+    let mut kept_locates = 0usize;
+
     // ---------------------------------------------
     // Load locate map (locate -> ticker)
     // ---------------------------------------------
+    let allowed_tickers = load_allowed_tickers(date)?;
+    if allowed_tickers.is_empty() {
+        return Err(format!("No allowed S&P tickers found for year {}", &date[..4]).into());
+    }
+    println!("Loaded {} allowed S&P tickers for {}", allowed_tickers.len(), &date[..4]);
+
     let mut loc_to_ticker: HashMap<u16, String> = HashMap::new();
 
     let locate_file = std::fs::read_to_string(&locate_path)?;
     for line in locate_file.lines() {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() < 2 { continue; }
-        let ticker = parts[0].trim().to_string();
-        let locate: u16 = parts[1].trim().parse().unwrap_or(0);
+        total_locates += 1;
+
+        let mut parts = line.splitn(3, ',');
+
+        let raw_ticker = match parts.next() {
+            Some(x) => x.trim(),
+            None => continue,
+        };
+
+        let locate_str = match parts.next() {
+            Some(x) => x.trim(),
+            None => continue,
+        };
+
+        let locate: u16 = match locate_str.parse() {
+            Ok(x) if x != 0 => x,
+            _ => continue,
+        };
+
+        let ticker = normalize_ticker(raw_ticker);
+
+        if !allowed_tickers.contains(&ticker) {
+            continue;
+        }
+
+        kept_locates += 1;
         loc_to_ticker.insert(locate, ticker);
     }
 
-    println!("Loaded {} locate codes", loc_to_ticker.len());
+    if loc_to_ticker.is_empty() {
+        return Err(format!("No locate codes matched allowed tickers for {}", date).into());
+    }
+
+    println!(
+        "Locate filter: kept {} of {} locate rows",
+        kept_locates, total_locates
+    );
+    println!("Loaded {} filtered locate codes", loc_to_ticker.len());
 
     // ---------------------------------------------
     // Stream ITCH
@@ -110,7 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for msg in msgs {
 
             let writer = writers.entry(locate).or_insert_with(|| {
-                let path = format!("{}/{}.csv", output_dir, ticker);
+                let path = format!("{}/{}_{}.csv", output_dir, ticker, locate);
                 Writer::from_path(path).unwrap()
             });
 
@@ -127,78 +200,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-
-// use rust::MsgStream;
-// use std::env;
-// use std::io::{self};
-// //use std::process::Command;
-// use std::time::Instant;
-// fn main() -> io::Result<()> {
-//     let args: Vec<String> = env::args().collect();
-//     let start = Instant::now();
-//     let accepted_year = &args[1];
-
-//     //get the dates that have already been parsed
-//     let mut data_files: Vec<String> = Vec::new();
-//     let data_folders = std::fs::read_dir("../data/lob_files")?;
-//     for folder in data_folders {
-//         let entry = folder?.file_name().into_string().unwrap();
-//         data_files.push(entry);
-//     }
-
-//     //add the dates that still need to be parsed from that certain year 
-//     let mut entries: Vec<String> = Vec::new();
-//     let dir = std::fs::read_dir("../data/locates")?;
-//     for file in dir {
-//         let entry = file?.file_name().into_string().unwrap();
-//         let year = entry.get(17..19).unwrap();
-//         let date = entry.get(19..23).unwrap();
-//         let full_date = date.to_owned() + year;
-//         if year == accepted_year && !data_files.contains(&full_date) {
-//             entries.push(entry);
-//         }
-//     }
-//     entries.sort();
-
-//     //iterate through dates and parse and make the order book
-//     for entry in entries {
-//         let year = entry.get(17..19).unwrap();
-//         let date = entry.get(19..23).unwrap();
-//         let full_date = date.to_owned() + year;
-//         println!("{} {}", full_date, accepted_year);
-
-//         let dow30 = vec![
-//             "AAPL", "AXP", "BA", "CAT", "CSCO", "CVX", "DIS", "DWDP", "GE", "GS", "HD", "IBM",
-//             "INTC", "JNJ", "JPM", "KO", "MCD", "MMM", "MRK", "MSFT", "NKE", "PFE", "PG", "TRV",
-//             "UNH", "UTX", "V", "VZ", "WBA", "WMT", "XOM",
-//         ];
-//         let tester_read = MsgStream::from_gz_to_buf(format!("itchdata/S{}-v50.txt.gz", &full_date));
-//         if tester_read.is_err() {
-//             continue;
-//         } else {
-//             let start_file = Instant::now();
-//             //let mut test_read =
-//                 //MsgStream::from_gz_to_buf(format!("itchdata/S{}-v50.txt.gz", &full_date)).unwrap();
-//             let mut test_read =
-//                 MsgStream::from_gz_to_buf(format!("itchdata/S{}-v50.txt.gz", &full_date)).unwrap();
-//             let _a = test_read.get_locate_codes(dow30, &full_date);
-//             println!("{:?}", &test_read.loc_to_ticker);
-
-//             let _b = test_read.process_bytes();
-//             let process_time = Instant::elapsed(&start_file);
-//             println!("{:?}", process_time);
-
-//             let _c = test_read.process_order_book();
-//             let order_time = Instant::elapsed(&start_file) - process_time;
-//             println!("{:?}", order_time);
-//             let _d = test_read.write_companies(&full_date);
-//             println!("finished date: {}", full_date);
-//             std::mem::drop(test_read);
-//         }
-
-//     }
-//     let finish = Instant::elapsed(&start);
-//     println!("{:?}", finish);
-//     Ok(())
-// }
