@@ -56,6 +56,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let date = &args[1];
+    if date.len() != 8 || !date.chars().all(|c| c.is_ascii_digit()) {
+        return Err(format!("date must be YYYYMMDD, got {}", date).into());
+    }
 
     // ---------------------------------------------
     // Paths (project-root relative)

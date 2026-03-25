@@ -6,6 +6,13 @@ import shutil
 from ..hftf.latency_analysis import process_file
 
 
+def _process_file_safe(filename):
+    try:
+        return filename, process_file(filename), None
+    except Exception as exc:
+        return filename, [], str(exc)
+
+
 def process_files_for_date(date, project_root):
     LOB_ROOT = os.environ.get("MTL_LOB_ROOT", "data/lob_files")
     folder = os.path.join(LOB_ROOT, date)
@@ -35,9 +42,16 @@ def process_files_for_date(date, project_root):
 
     # Run multiprocessing
     with mp.Pool(processes=num_cpus) as pool:
-        results = pool.map(process_file, filenames)
+        results = pool.map(_process_file_safe, filenames)
 
-    flattened = [row for sublist in results for row in sublist]
+    failures = [(name, err) for name, _rows, err in results if err is not None]
+    if failures:
+        print(f"Encountered {len(failures)} failed files on {date}")
+        for name, err in failures[:10]:
+            print(f"  FAILED: {name} :: {err}")
+        raise RuntimeError(f"Aborting {date}: file-level failures detected")
+
+    flattened = [row for _name, sublist, _err in results for row in sublist]
 
     if not flattened:
         print(f"No results generated for {date}")

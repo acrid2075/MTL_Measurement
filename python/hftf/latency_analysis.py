@@ -15,6 +15,14 @@ def process_file(filename):
         print(f"  Processing {ticker}, {day}")
         #Load-in File:
         dff = pd.read_csv(filename)#,
+        required_cols = {
+            'typ', 'timestamp', 'orn', 'buy_sell', 'shares',
+            'price', 'bid', 'ask', 'spread'
+        }
+        missing_cols = required_cols.difference(dff.columns)
+        if missing_cols:
+            raise ValueError(f"Missing required columns in {filename}: {sorted(missing_cols)}")
+
                     #   header = 0, dtype = {'typ': np.int64, 'timestamp': np.int64, 'orn': np.int64, 'buy_sell':np.int64, 'shares': np.int64,
                     #                        'price': np.int64, 'executed_shares': np.int64, 'executed_price': np.int64, 'new_orff': np.int64,
                     #                        'cancelled_shares': np.int64, 'bid': np.int64, 'ask': np.int64,
@@ -34,6 +42,9 @@ def process_file(filename):
         dff.loc[dff['spread'] == 0, 'spread'] = pd.NA
         dff.loc[dff['bid'] == 0, 'bid'] = pd.NA
         dff.loc[dff['ask'] == 0, 'ask'] = pd.NA
+        crossed_quotes = dff['bid'].notna() & dff['ask'].notna() & (dff['bid'] > dff['ask'])
+        if crossed_quotes.any():
+            dff.loc[crossed_quotes, ['bid', 'ask', 'spread']] = pd.NA
         dff.buy_sell = dff.groupby("orn").buy_sell.ffill()
         dff.price = dff.groupby("orn")["price"].ffill()
 
@@ -63,6 +74,8 @@ def process_file(filename):
         #Get Mid-Price for non execution prices:
         na_price_ind = filtered_df.price.isna()
         filtered_df.loc[na_price_ind, ['price']] = (filtered_df[na_price_ind].ask + filtered_df[na_price_ind].bid) / 2
+        filtered_df = filtered_df.loc[filtered_df['price'].notna() & (filtered_df['price'] > 0)]
+        filtered_df.reset_index(drop=True, inplace=True)
 
         #Define Signals:
         signals = filtered_df.loc[filtered_df['typ_x'].isin(['E', 'C', 'P']), :] #executions, 'type_x' MODIFY
@@ -267,13 +280,15 @@ def process_file(filename):
         # print(f"   {trade_count} trades conducted")
 
         # ticker TEXT, date TEXT, latency value INTEGER, EOD profit FLOAT, STD of profits per trade FLOAT, no. trades INT, maximum executed price FLOAT, minimum executed price FLOAT, average trend length FLOAT, number of trends INT
+        avg_trend_length = float(np.mean(trend_length)) if trend_length else 0.0
         results.append([str(ticker), str(day), int(delay), float(W[-1]),  
                         float(np.std(prof)), int(trade_count), float(signals['price'].max()), 
-                        float(signals['price'].min()), float(np.mean(trend_length)), len(trend_length), sum(eff_list), len(eff_list)])
+                        float(signals['price'].min()), avg_trend_length, len(trend_length), sum(eff_list), len(eff_list)])
 
         for delay in delays:
             print(f"      Addressing delay {delay} microseconds, {ticker}")
             delay_one_way = delay
+            trend_length = []
 
             #Initialize and record efficiency:
             eff_list = []  # efficiency list
@@ -442,13 +457,13 @@ def process_file(filename):
             # print(f"   {trade_count} trades conducted")
 
             # ticker TEXT, date TEXT, latency value INTEGER, EOD profit FLOAT, STD of profits per trade FLOAT, no. trades INT, maximum executed price FLOAT, minimum executed price FLOAT, average trend length FLOAT, number of trends INT
+            avg_trend_length = float(np.mean(trend_length)) if trend_length else 0.0
             results.append([str(ticker), str(day), int(delay), float(W[-1]),  
                             float(np.std(prof)), int(trade_count), float(signals['price'].max()), 
-                            float(signals['price'].min()), float(np.mean(trend_length)), len(trend_length), sum(eff_list), len(eff_list)])
+                            float(signals['price'].min()), avg_trend_length, len(trend_length), sum(eff_list), len(eff_list)])
             
         print(f"   Completed {day}, {ticker}")
         return results
     except Exception as e:
-        print(f"Failed on {filename}: {e}")
-        return []
+        raise RuntimeError(f"Failed on {filename}: {e}") from e
                 
