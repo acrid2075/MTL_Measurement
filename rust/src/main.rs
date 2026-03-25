@@ -16,8 +16,18 @@ use lib1_framer::MsgStream;
 use lib2_parser::parse_message;
 use lib3_ob::OrderBook;
 
+/// Align ITCH/locate tickers with Compustat-style `tic` in sp500.csv:
+/// trim BOM/whitespace, drop accidental spaces, map hyphen and unicode dashes to `.` (BRK-B ↔ BRK.B).
 fn normalize_ticker(t: &str) -> String {
-    t.trim().to_uppercase().replace('-', ".")
+    t.trim()
+        .trim_start_matches('\u{feff}')
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .map(|c| match c {
+            '-' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '.',
+            c => c.to_ascii_uppercase(),
+        })
+        .collect()
 }
 
 fn load_allowed_tickers(date: &str) -> Result<HashSet<String>, Box<dyn std::error::Error>> {

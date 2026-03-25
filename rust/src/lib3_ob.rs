@@ -118,7 +118,7 @@ impl OrderBook {
             } else {
                 eprintln!("WARN: remove/update for missing orn={} typ={}", msg0.orn, typ);
             }
-        } else if typ == b'C' || typ == b'E' || typ == b'X' {
+        } else if typ == b'E' || typ == b'X' {
             //c,e,x
             if self.bids.contains_key(&msg0.orn) {
                 let ord = self.bids.get(&msg0.orn).unwrap();
@@ -163,6 +163,53 @@ impl OrderBook {
                 self.ask_depth = self.ask_depth.saturating_sub(removed);
                 msg0.buy_sell = b'S';
                 msg0.price = price;
+                msg0.shares = removed;
+            } else {
+                eprintln!("WARN: execution/cancel for missing orn={} typ={}", msg0.orn, typ);
+            }
+        } else if typ == b'C' {
+            //c,e,x
+            if self.bids.contains_key(&msg0.orn) {
+                let ord = self.bids.get(&msg0.orn).unwrap();
+                let requested = msg0.shares;
+                let shares = requested.min(ord[1]);
+                let shares_rem = ord[1] - shares;
+                let price = ord[0];
+                if requested > ord[1] {
+                    eprintln!(
+                        "WARN: bid reduction exceeds shares orn={} requested={} available={}",
+                        msg0.orn, requested, ord[1]
+                    );
+                }
+                if shares_rem == 0 {
+                    self.bids.remove(&msg0.orn);
+                } else {
+                    self.bids.entry(msg0.orn).and_modify(|ord| ord[1] = shares_rem);
+                }
+                let removed = Self::decrement_level(&mut self.bid_spread, price, shares, "bid", msg0.orn);
+                self.bid_depth = self.bid_depth.saturating_sub(removed);
+                msg0.buy_sell = b'B';
+                msg0.shares = removed;
+            } else if self.asks.contains_key(&msg0.orn) {
+                let ord = self.asks.get(&msg0.orn).unwrap();
+                let requested = msg0.shares;
+                let shares = requested.min(ord[1]);
+                let shares_rem = ord[1] - shares;
+                let price = ord[0];
+                if requested > ord[1] {
+                    eprintln!(
+                        "WARN: ask reduction exceeds shares orn={} requested={} available={}",
+                        msg0.orn, requested, ord[1]
+                    );
+                }
+                if shares_rem == 0 {
+                    self.asks.remove(&msg0.orn);
+                } else {
+                    self.asks.entry(msg0.orn).and_modify(|ord| ord[1] = shares_rem);
+                }
+                let removed = Self::decrement_level(&mut self.ask_spread, price, shares, "ask", msg0.orn);
+                self.ask_depth = self.ask_depth.saturating_sub(removed);
+                msg0.buy_sell = b'S';
                 msg0.shares = removed;
             } else {
                 eprintln!("WARN: execution/cancel for missing orn={} typ={}", msg0.orn, typ);
