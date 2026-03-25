@@ -251,7 +251,7 @@ fn parse_C(frame: &[u8]) -> std::io::Result<SmallVec<[Message; 2]>> {
         orn: orn,
         buy_sell: 0,
         shares: executed_shares,
-        price: 0,
+        price: price,
     });
     Ok(v)
 }
