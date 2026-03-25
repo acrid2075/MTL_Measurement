@@ -53,14 +53,33 @@ def process_files_for_date(date, project_root):
 
     flattened = [row for _name, sublist, _err in results for row in sublist]
 
-    if not flattened:
-        print(f"No results generated for {date}")
-        return
-
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     try:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS results (
+            ticker TEXT,
+            date TEXT,
+            latency INTEGER,
+            eod_profit REAL,
+            std_profit REAL,
+            trade_count INTEGER,
+            max_price REAL,
+            min_price REAL,
+            avg_trend_length REAL,
+            num_trends INTEGER,
+            efficient_count INTEGER,
+            event_count INTEGER
+        )
+        """)
+
+        conn.commit()
+
+        if not flattened:
+            print(f"No results generated for {date}")
+            return
+
         cursor.executemany(
             """
             INSERT INTO results
