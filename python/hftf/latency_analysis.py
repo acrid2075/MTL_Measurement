@@ -286,9 +286,8 @@ def process_file(filename):
                         float(signals['price'].min()), avg_trend_length, len(trend_length), sum(eff_list), len(eff_list)])
 
         for delay in delays:
-            print(f"      Addressing delay {delay} microseconds, {ticker}")
+            print(f"      Addressing delay {delay} nanoseconds, {ticker}")
             delay_one_way = delay
-            trend_length = []
 
             #Initialize and record efficiency:
             eff_list = []  # efficiency list
@@ -457,7 +456,6 @@ def process_file(filename):
             # print(f"   {trade_count} trades conducted")
 
             # ticker TEXT, date TEXT, latency value INTEGER, EOD profit FLOAT, STD of profits per trade FLOAT, no. trades INT, maximum executed price FLOAT, minimum executed price FLOAT, average trend length FLOAT, number of trends INT
-            avg_trend_length = float(np.mean(trend_length)) if trend_length else 0.0
             results.append([str(ticker), str(day), int(delay), float(W[-1]),  
                             float(np.std(prof)), int(trade_count), float(signals['price'].max()), 
                             float(signals['price'].min()), avg_trend_length, len(trend_length), sum(eff_list), len(eff_list)])

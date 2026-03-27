@@ -101,9 +101,7 @@ impl OrderBook {
                 let removed = Self::decrement_level(&mut self.bid_spread, price, shares, "bid", msg0.orn);
                 msg0.buy_sell = b'B';
                 msg0.price = price;
-                if typ == b'D' {
-                    msg0.shares = removed;
-                }
+                msg0.shares = removed;
                 self.bid_depth = self.bid_depth.saturating_sub(removed);
             } else if let Some(ord) = self.asks.remove(&msg0.orn) {
                 let shares = ord[1];
@@ -111,15 +109,13 @@ impl OrderBook {
                 let removed = Self::decrement_level(&mut self.ask_spread, price, shares, "ask", msg0.orn);
                 msg0.buy_sell = b'S';
                 msg0.price = price;
-                if typ == b'D' {
-                    msg0.shares = removed;
-                }
+                msg0.shares = removed;
                 self.ask_depth = self.ask_depth.saturating_sub(removed);
             } else {
                 eprintln!("WARN: remove/update for missing orn={} typ={}", msg0.orn, typ);
             }
         } else if typ == b'E' || typ == b'X' {
-            //c,e,x
+            //e,x
             if self.bids.contains_key(&msg0.orn) {
                 let ord = self.bids.get(&msg0.orn).unwrap();
                 let requested = msg0.shares;
@@ -168,7 +164,7 @@ impl OrderBook {
                 eprintln!("WARN: execution/cancel for missing orn={} typ={}", msg0.orn, typ);
             }
         } else if typ == b'C' {
-            //c,e,x
+            //c
             if self.bids.contains_key(&msg0.orn) {
                 let ord = self.bids.get(&msg0.orn).unwrap();
                 let requested = msg0.shares;
@@ -252,6 +248,7 @@ impl OrderBook {
             let msg1 = &mut msgs[1];
             msg1.bid = bid;
             msg1.ask = ask;
+            msg1.spread = if ask >= bid { ask - bid } else { 0 };
             msg1.ask_depth = self.ask_depth;
             msg1.bid_depth = self.bid_depth;
             msg1.depth = self.ask_depth + self.bid_depth;
